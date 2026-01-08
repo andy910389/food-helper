@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>食材小幫手</title>
+    
+    <!-- 1. 引入 React -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 2. 引入 Babel (讓瀏覽器看得懂 React 程式碼) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 3. 引入 Tailwind CSS (免安裝版) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 設定 Tailwind 的莫蘭迪色 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        morandi: {
+                            blue: '#6B8E9E',
+                            light: '#8FA6B5',
+                            bg: '#F5F7F8',
+                            red: '#C17B7B',
+                            text: '#546E7A',
+                            border: '#CFD8DC'
+                        }
+                    },
+                    animation: {
+                        'fade-in-down': 'fadeInDown 0.5s ease-out',
+                        'fade-in': 'fadeIn 0.5s ease-out'
+                    },
+                    keyframes: {
+                        fadeInDown: {
+                            '0%': { opacity: '0', transform: 'translate(-50%, -20px)' },
+                            '100%': { opacity: '1', transform: 'translate(-50%, 0)' },
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-morandi-bg text-gray-700 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- 設定與圖示 ---
+        const { useState, useEffect } = React;
+        const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbycM-ySKW-q81SfFIbkQ-hGoJ1J7wRsFR4tXXbFcgItDIgMPNWs_pK5I0PtKNI5NGw9/exec";
+        const UNIT_OPTIONS = ['顆', '盒', '袋', '片'];
+        const CATEGORY_OPTIONS = ['蔬菜', '蛋', '肉類', '水果', '甜點'];
+
+        // 簡易圖示元件
+        const Icons = {
+            ChefHat: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>,
+            RefreshCw: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>,
+            PlusCircle: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>,
+            List: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
+            Save: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+            Trash2: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
+            Edit: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+            X: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+            Calendar: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+            CheckCircle2: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>,
+            AlertCircle: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>,
+            Loader2: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
+            Terminal: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>,
+            Activity: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>,
+            Package: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>,
+            Tag: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></svg>,
+            Filter: ({className}) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        };
+
+        // --- 元件: Toast 通知 ---
+        const Toast = ({ message, type, onClose }) => {
+            useEffect(() => {
+                const timer = setTimeout(() => onClose(), 5000);
+                return () => clearTimeout(timer);
+            }, [onClose]);
+
+            const bgColors = {
+                success: 'bg-morandi-blue',
+                error: 'bg-morandi-red',
+                info: 'bg-morandi-light'
+            };
+
+            return (
+                <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[60] flex items-center gap-2 px-4 py-3 rounded-lg shadow-xl text-white ${bgColors[type] || bgColors.info} animate-fade-in-down`}>
+                    {type === 'success' && <Icons.CheckCircle2 className="h-5 w-5" />}
+                    {type === 'error' && <Icons.AlertCircle className="h-5 w-5" />}
+                    {type === 'info' && <Icons.Loader2 className="h-5 w-5 animate-spin" />}
+                    <span className="font-medium text-sm">{message}</span>
+                    <button onClick={onClose} className="ml-4 opacity-80 hover:opacity-100">
+                        <Icons.X className="h-4 w-4" />
+                    </button>
+                </div>
+            );
+        };
+
+        // --- 元件: 日期選擇器 ---
+        const DateDropdownPicker = ({ label, value, onChange }) => {
+            const currentYear = new Date().getFullYear();
+            const years = Array.from({ length: 11 }, (_, i) => currentYear + i);
+            const months = Array.from({ length: 12 }, (_, i) => i + 1);
+            
+            const [selectedYear, setSelectedYear] = useState(currentYear);
+            const [selectedMonth, setSelectedMonth] = useState(1);
+            const [selectedDay, setSelectedDay] = useState(1);
+
+            useEffect(() => {
+                if (value) {
+                    const date = new Date(value);
+                    if (!isNaN(date.getTime())) {
+                        setSelectedYear(date.getFullYear());
+                        setSelectedMonth(date.getMonth() + 1);
+                        setSelectedDay(date.getDate());
+                    }
+                }
+            }, [value]);
+
+            const updateDate = (y, m, d) => {
+                const paddedM = m.toString().padStart(2, '0');
+                const paddedD = d.toString().padStart(2, '0');
+                onChange(`${y}-${paddedM}-${paddedD}`);
+            };
+
+            const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+            const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+            return (
+                <div className="flex flex-col space-y-1">
+                    <label className="text-sm font-medium text-gray-600">{label}</label>
+                    <div className="flex space-x-2">
+                        <div className="flex-1">
+                            <select className="w-full p-2 border border-morandi-border rounded-md bg-white focus:ring-2 focus:ring-morandi-light outline-none text-gray-700" value={selectedYear} onChange={(e) => { const val = parseInt(e.target.value); setSelectedYear(val); updateDate(val, selectedMonth, selectedDay); }}>
+                                {years.map(y => <option key={y} value={y}>{y}年</option>)}
+                            </select>
+                        </div>
+                        <div className="flex-1">
+                            <select className="w-full p-2 border border-morandi-border rounded-md bg-white focus:ring-2 focus:ring-morandi-light outline-none text-gray-700" value={selectedMonth} onChange={(e) => { const val = parseInt(e.target.value); setSelectedMonth(val); updateDate(selectedYear, val, selectedDay); }}>
+                                {months.map(m => <option key={m} value={m}>{m}月</option>)}
+                            </select>
+                        </div>
+                        <div className="flex-1">
+                            <select className="w-full p-2 border border-morandi-border rounded-md bg-white focus:ring-2 focus:ring-morandi-light outline-none text-gray-700" value={selectedDay} onChange={(e) => { const val = parseInt(e.target.value); setSelectedDay(val); updateDate(selectedYear, selectedMonth, val); }}>
+                                {days.map(d => <option key={d} value={d}>{d}日</option>)}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 主程式: App ---
+        function App() {
+            const [activeTab, setActiveTab] = useState('input');
+            const [ingredients, setIngredients] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [toast, setToast] = useState(null);
+            const [processingId, setProcessingId] = useState(null);
+            const [logs, setLogs] = useState([]); 
+            const [showLogs, setShowLogs] = useState(false);
+            const [filterCategory, setFilterCategory] = useState('全部');
+
+            const initialFormState = {
+                category: '蔬菜',
+                name: '',
+                quantity: '1',
+                unit: '顆',
+                purchaseDate: new Date().toISOString().split('T')[0],
+                expiryDate: new Date().toISOString().split('T')[0]
+            };
+            const [formData, setFormData] = useState(initialFormState);
+            const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+            const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const [deletingItem, setDeletingItem] = useState(null);
+
+            useEffect(() => {
+                fetchIngredients();
+            }, []);
+
+            const addLog = (msg) => {
+                const time = new Date().toLocaleTimeString();
+                setLogs(prev => [`[${time}] ${msg}`, ...prev]);
+            };
+
+            const showToast = (message, type = 'info') => {
+                setToast({ message, type });
+            };
+
+            const parseQuantity = (rawString) => {
+                const str = String(rawString);
+                const numMatch = str.match(/(\d+)/);
+                const unitMatch = str.replace(/[0-9]/g, '').trim();
+                return {
+                    quantity: numMatch ? numMatch[0] : '1',
+                    unit: unitMatch || '顆'
+                };
+            };
+
+            const filteredIngredients = ingredients.filter(item => {
+                if (filterCategory === '全部') return true;
+                return item.category === filterCategory;
+            });
+
+            const fetchIngredients = async () => {
+                setLoading(true);
+                addLog(`開始讀取資料...`);
+                try {
+                    const response = await fetch(`${DEFAULT_SCRIPT_URL}?action=read`);
+                    const text = await response.text();
+                    let data;
+                    try { data = JSON.parse(text); } catch (e) { throw new Error("回傳格式錯誤，請確認 GAS"); }
+                    
+                    if (data.status === 'success') {
+                        const parsedData = data.data.map(item => {
+                            const { quantity, unit } = parseQuantity(item.quantity);
+                            return { ...item, quantity, unit };
+                        });
+                        setIngredients(parsedData);
+                        addLog(`成功讀取 ${parsedData.length} 筆資料`);
+                    } else {
+                        showToast("讀取失敗：" + data.message, 'error');
+                    }
+                } catch (error) {
+                    addLog(`連線例外錯誤: ${error.message}`);
+                    showToast("連線失敗，請檢查網路", 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const sendToSheet = async (payload) => {
+                addLog(`準備發送 ${payload.action} 請求...`);
+                try {
+                    if(payload.action === 'delete') showToast("刪除中...", "info");
+                    const response = await fetch(DEFAULT_SCRIPT_URL, {
+                        method: 'POST',
+                        redirect: 'follow', 
+                        headers: { "Content-Type": "text/plain" },
+                        body: JSON.stringify(payload)
+                    });
+                    const text = await response.text();
+                    let data;
+                    try { data = JSON.parse(text); } catch (e) { throw new Error("伺服器回應錯誤"); }
+                    
+                    if (data.status === 'success') {
+                        addLog("操作成功，重新讀取清單...");
+                        await fetchIngredients(); 
+                        return true;
+                    } else {
+                        showToast("操作失敗: " + data.message, 'error');
+                        return false;
+                    }
+                } catch (error) {
+                    addLog(`傳送錯誤: ${error.message}`);
+                    showToast("傳送失敗", 'error');
+                    return false;
+                }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!formData.name.trim()) return;
+                setLoading(true);
+                const combinedQuantity = `${formData.quantity}${formData.unit}`;
+                const success = await sendToSheet({
+                    action: 'add',
+                    category: formData.category,
+                    name: formData.name,
+                    quantity: combinedQuantity,
+                    purchaseDate: formData.purchaseDate,
+                    expiryDate: formData.expiryDate
+                });
+                setLoading(false);
+                if (success) {
+                    setFormData(initialFormState);
+                    showToast("新增成功！", 'success');
+                    setActiveTab('list');
+                    setFilterCategory('全部');
+                }
+            };
+
+            const handleUpdate = async () => {
+                if (!editingItem || !editingItem.name.trim()) return;
+                setLoading(true);
+                const combinedQuantity = `${editingItem.quantity}${editingItem.unit}`;
+                const success = await sendToSheet({
+                    action: 'update',
+                    id: Number(editingItem.id),
+                    category: editingItem.category,
+                    name: editingItem.name,
+                    quantity: combinedQuantity,
+                    purchaseDate: editingItem.purchaseDate,
+                    expiryDate: editingItem.expiryDate
+                });
+                setLoading(false);
+                if (success) {
+                    setIsEditModalOpen(false);
+                    setEditingItem(null);
+                    showToast("更新成功！", 'success');
+                }
+            };
+
+            const confirmDelete = async () => {
+                if (!deletingItem) return;
+                setIsDeleteModalOpen(false); 
+                setProcessingId(deletingItem.id);
+                const success = await sendToSheet({
+                    action: 'delete',
+                    id: Number(deletingItem.id) 
+                });
+                setProcessingId(null);
+                setDeletingItem(null);
+                if (success) showToast("刪除成功！", 'success');
+            };
+
+            const quantityOptions = Array.from({ length: 100 }, (_, i) => i + 1);
+
+            return (
+                <div className={`min-h-screen ${showLogs ? 'pb-40' : ''}`}>
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+                    <header className="bg-morandi-blue text-white shadow-md p-4 sticky top-0 z-10">
+                        <div className="max-w-3xl mx-auto flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <Icons.ChefHat className="h-8 w-8 text-[#E0E9ED]" />
+                                <h1 className="text-xl font-bold tracking-wide">食材小幫手</h1>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <label className="flex items-center gap-1.5 cursor-pointer text-sm bg-[#5A7988] px-3 py-1.5 rounded-md hover:bg-[#4C6876] transition-colors select-none">
+                                    <input type="checkbox" checked={showLogs} onChange={(e) => setShowLogs(e.target.checked)} className="accent-morandi-light h-3.5 w-3.5 cursor-pointer" />
+                                    <Icons.Activity className="h-3.5 w-3.5" />
+                                    <span className="text-xs font-medium">系統紀錄</span>
+                                </label>
+                                <button onClick={() => fetchIngredients()} className="text-xs bg-[#5A7988] hover:bg-[#4C6876] px-3 py-1.5 rounded flex items-center gap-1 transition-colors">
+                                    <Icons.RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+                                    整理
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-3xl mx-auto p-4">
+                        {loading && (
+                            <div className="fixed inset-0 bg-white/50 z-50 flex items-center justify-center backdrop-blur-[2px]">
+                                <div className="bg-white p-4 rounded-full shadow-xl">
+                                    <Icons.Loader2 className="h-8 w-8 text-morandi-blue animate-spin" />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex bg-white rounded-lg shadow-sm p-1 mb-6 border border-morandi-border">
+                            <button onClick={() => setActiveTab('input')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-md transition-all font-medium ${activeTab === 'input' ? 'bg-[#EBF1F4] text-[#5A7988] shadow-sm' : 'text-gray-400 hover:bg-gray-50'}`}>
+                                <Icons.PlusCircle className="h-5 w-5" /> 新增食材
+                            </button>
+                            <button onClick={() => setActiveTab('list')} className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-md transition-all font-medium ${activeTab === 'list' ? 'bg-[#EBF1F4] text-[#5A7988] shadow-sm' : 'text-gray-400 hover:bg-gray-50'}`}>
+                                <Icons.List className="h-5 w-5" /> 食材明細
+                            </button>
+                        </div>
+
+                        {activeTab === 'input' && (
+                            <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in border border-morandi-border">
+                                <h2 className="text-lg font-bold text-morandi-text mb-4 border-b pb-2 border-morandi-border">輸入食材資訊</h2>
+                                <form onSubmit={handleSubmit} className="space-y-5">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-600 mb-1">食材類型</label>
+                                        <select name="category" value={formData.category} onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))} className="w-full p-3 border border-morandi-border rounded-lg focus:ring-2 focus:ring-morandi-light outline-none bg-white text-gray-700">
+                                            {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-600 mb-1">食材品項</label>
+                                        <input type="text" name="name" placeholder="例如：雞蛋" value={formData.name} onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))} className="w-full p-3 border border-morandi-border rounded-lg focus:ring-2 focus:ring-morandi-light outline-none text-gray-700" required />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-600 mb-1">數量與單位</label>
+                                        <div className="flex gap-2">
+                                            <select name="quantity" value={formData.quantity} onChange={(e) => setFormData(prev => ({ ...prev, quantity: e.target.value }))} className="flex-[2] p-3 border border-morandi-border rounded-lg focus:ring-2 focus:ring-morandi-light outline-none bg-white text-gray-700">
+                                                {quantityOptions.map(num => <option key={num} value={num}>{num}</option>)}
+                                            </select>
+                                            <select name="unit" value={formData.unit} onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))} className="flex-1 p-3 border border-morandi-border rounded-lg focus:ring-2 focus:ring-morandi-light outline-none bg-white text-gray-700">
+                                                {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-600 mb-1">購買日期</label>
+                                        <div className="relative">
+                                            <input type="date" name="purchaseDate" value={formData.purchaseDate} onChange={(e) => setFormData(prev => ({ ...prev, purchaseDate: e.target.value }))} className="w-full p-3 pl-10 border border-morandi-border rounded-lg focus:ring-2 focus:ring-morandi-light outline-none text-gray-700" required />
+                                            <Icons.Calendar className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                                        </div>
+                                    </div>
+                                    <DateDropdownPicker label="保存期限" value={formData.expiryDate} onChange={(val) => setFormData(prev => ({ ...prev, expiryDate: val }))} />
+                                    <button type="submit" disabled={loading} className="w-full bg-morandi-blue hover:bg-morandi-light text-white font-bold py-3.5 rounded-lg shadow-md transition-transform active:scale-[0.98] mt-4 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                                        <Icons.Save className="h-5 w-5" /> {loading ? '處理中...' : '確認新增'}
+                                    </button>
+                                </form>
+                            </div>
+                        )}
+
+                        {activeTab === 'list' && (
+                            <div className="space-y-4 animate-fade-in">
+                                <div className="flex justify-between items-center px-1">
+                                    <h2 className="text-lg font-bold text-morandi-text flex items-center gap-2">
+                                        <Icons.List className="h-5 w-5" /> 庫存清單 ({filteredIngredients.length})
+                                    </h2>
+                                </div>
+                                <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+                                    <button onClick={() => setFilterCategory('全部')} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-all shadow-sm border ${filterCategory === '全部' ? 'bg-morandi-blue text-white border-morandi-blue' : 'bg-white text-gray-500 border-morandi-border'}`}>全部</button>
+                                    {CATEGORY_OPTIONS.map(cat => (
+                                        <button key={cat} onClick={() => setFilterCategory(cat)} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-all shadow-sm border ${filterCategory === cat ? 'bg-morandi-blue text-white border-morandi-blue' : 'bg-white text-gray-500 border-morandi-border'}`}>{cat}</button>
+                                    ))}
+                                </div>
+                                {ingredients.length === 0 ? (
+                                    <div className="text-center p-10 bg-white rounded-xl shadow border border-dashed border-morandi-border"><p className="text-gray-400">目前沒有資料，或正在讀取中...</p></div>
+                                ) : filteredIngredients.length === 0 ? (
+                                    <div className="text-center p-10 bg-white rounded-xl shadow border border-dashed border-morandi-border flex flex-col items-center gap-2">
+                                        <Icons.Filter className="h-8 w-8 text-gray-300" />
+                                        <p className="text-gray-400">"{filterCategory}" 類別中沒有食材</p>
+                                        <button onClick={() => setFilterCategory('全部')} className="text-morandi-blue text-sm hover:underline">顯示全部</button>
+                                    </div>
+                                ) : (
+                                    <div className="grid gap-4">
+                                        {filteredIngredients.map((item) => (
+                                            <div key={item.id} className={`bg-white p-4 rounded-xl shadow-sm border-l-4 border-morandi-light flex justify-between items-start transition-opacity ${processingId === item.id ? 'opacity-60 pointer-events-none' : ''}`}>
+                                                <div className="flex-1">
+                                                    <div className="mb-1"><span className="inline-flex items-center gap-1 bg-[#F1F5F7] text-[#607D8B] text-xs px-2 py-0.5 rounded border border-[#E0E6E9] font-medium"><Icons.Tag className="h-3 w-3" />{item.category || '未分類'}</span></div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <h3 className="font-bold text-lg text-[#455A64]">{item.name}</h3>
+                                                        <span className="bg-[#E1F0F5] text-[#546E7A] text-sm px-3 py-1 rounded-full font-bold flex items-center gap-1"><Icons.Package className="h-3 w-3" />{item.quantity}{item.unit}</span>
+                                                    </div>
+                                                    <div className="text-sm text-gray-500 grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+                                                        <div className="flex flex-col"><span className="text-xs text-gray-400">購買日期</span><span>{item.purchaseDate || '-'}</span></div>
+                                                        <div className="flex flex-col"><span className="text-xs text-gray-400">保存期限</span><span className={`${item.expiryDate && new Date(item.expiryDate) < new Date() ? 'text-morandi-red font-bold' : ''}`}>{item.expiryDate || '-'}{item.expiryDate && new Date(item.expiryDate) < new Date() && ' (已過期)'}</span></div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-2 ml-4 border-l pl-4 border-[#EFF3F5]">
+                                                    <button onClick={() => { setEditingItem({...item}); setIsEditModalOpen(true); }} disabled={processingId === item.id} className="p-2 text-[#78909C] hover:bg-[#F5F7F8] rounded-lg transition-colors disabled:opacity-30"><Icons.Edit className="h-5 w-5" /></button>
+                                                    <button onClick={() => { setDeletingItem(item); setIsDeleteModalOpen(true); }} disabled={processingId === item.id} className="p-2 text-morandi-red hover:bg-[#FFF0F0] rounded-lg transition-colors disabled:opacity-30"><Icons.Trash2 className="h-5 w-5" /></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {isDeleteModalOpen && deletingItem && (
+                            <div className="fixed inset-0 bg-black/40 z-[70] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                                <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden p-6">
+                                    <h3 className="text-xl font-bold text-morandi-text mb-2">確認刪除？</h3>
+                                    <p className="text-gray-600 mb-6">確定要刪除 <span className="font-bold text-morandi-red">{deletingItem.name}</span> 嗎？此操作無法復原。</p>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setIsDeleteModalOpen(false)} className="flex-1 py-2 border border-morandi-border rounded-lg hover:bg-gray-50 text-gray-600">取消</button>
+                                        <button onClick={confirmDelete} className="flex-1 py-2 bg-morandi-red text-white rounded-lg hover:bg-[#A96363] shadow-sm font-bold">確認刪除</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {isEditModalOpen && editingItem && (
+                            <div className="fixed inset-0 bg-black/40 z-[70] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+                                    <div className="bg-morandi-blue p-4 flex justify-between items-center text-white">
+                                        <h3 className="font-bold text-lg flex items-center gap-2"><Icons.Edit className="h-5 w-5" /> 修改資料</h3>
+                                        <button onClick={() => setIsEditModalOpen(false)} className="hover:bg-morandi-light p-1 rounded-full"><Icons.X className="h-6 w-6" /></button>
+                                    </div>
+                                    <div className="p-6 overflow-y-auto space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-600 mb-1">食材類型</label>
+                                            <select value={editingItem.category || '蔬菜'} onChange={(e) => setEditingItem({...editingItem, category: e.target.value})} className="w-full p-2 border border-morandi-border rounded focus:ring-2 focus:ring-morandi-light outline-none text-gray-700">
+                                                {CATEGORY_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                            </select>
+                                        </div>
+                                        <div><label className="block text-sm font-medium text-gray-600 mb-1">食材品項</label><input type="text" value={editingItem.name} onChange={(e) => setEditingItem({...editingItem, name: e.target.value})} className="w-full p-2 border border-morandi-border rounded focus:ring-2 focus:ring-morandi-light outline-none text-gray-700" /></div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-600 mb-1">數量與單位</label>
+                                            <div className="flex gap-2">
+                                                <select value={editingItem.quantity} onChange={(e) => setEditingItem({...editingItem, quantity: e.target.value})} className="flex-[2] p-2 border border-morandi-border rounded focus:ring-2 focus:ring-morandi-light outline-none text-gray-700">{quantityOptions.map(num => <option key={num} value={num}>{num}</option>)}</select>
+                                                <select value={editingItem.unit} onChange={(e) => setEditingItem({...editingItem, unit: e.target.value})} className="flex-1 p-2 border border-morandi-border rounded focus:ring-2 focus:ring-morandi-light outline-none text-gray-700">{UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}</select>
+                                            </div>
+                                        </div>
+                                        <div><label className="block text-sm font-medium text-gray-600 mb-1">購買日期</label><input type="date" value={editingItem.purchaseDate} onChange={(e) => setEditingItem({...editingItem, purchaseDate: e.target.value})} className="w-full p-2 border border-morandi-border rounded focus:ring-2 focus:ring-morandi-light outline-none text-gray-700" /></div>
+                                        <DateDropdownPicker label="保存期限" value={editingItem.expiryDate} onChange={(val) => setEditingItem({...editingItem, expiryDate: val})} />
+                                    </div>
+                                    <div className="p-4 border-t bg-gray-50 flex gap-3">
+                                        <button onClick={() => setIsEditModalOpen(false)} className="flex-1 py-2 px-4 border border-morandi-border rounded-lg text-gray-600 font-medium hover:bg-gray-50">取消</button>
+                                        <button onClick={handleUpdate} disabled={loading} className="flex-1 py-2 px-4 bg-morandi-blue text-white rounded-lg font-medium hover:bg-morandi-light shadow-sm disabled:opacity-70">{loading ? '更新中...' : '確定更新'}</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {showLogs && (
+                        <div className="fixed bottom-0 left-0 right-0 h-40 bg-gray-900 text-[#A7C0CD] font-mono text-xs p-2 overflow-y-auto z-[50] opacity-90 border-t-2 border-morandi-blue">
+                            <div className="flex justify-between items-center mb-1 sticky top-0 bg-gray-900 pb-1 border-b border-gray-700"><span className="flex items-center gap-2 font-bold"><Icons.Terminal className="h-4 w-4" /> 系統紀錄</span><button onClick={() => setLogs([])} className="text-gray-400 hover:text-white px-2">清除</button></div>
+                            {logs.length === 0 ? <div className="text-gray-600 italic p-2">連線中...</div> : logs.map((log, index) => <div key={index} className="mb-0.5 border-b border-gray-800 pb-0.5 break-all">{log}</div>)}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
